@@ -57,7 +57,7 @@ O projeto foi desenvolvido como **MVP do Projeto Integrador I**, com foco em aut
 * **RNF02** – Garantir integridade dos dados no banco de dados
 * **RNF03** – Utilizar autenticação segura para acesso ao Google Calendar (OAuth2)
 * **RNF04** – Ser compatível com navegadores modernos e dispositivos móveis
-* **RNF05** – Manter credenciais sensíveis em variáveis de ambiente
+* **RNF05** – Não expor credenciais sensíveis
 * **RNF06** – Permitir fácil manutenção e extensão dos workflows
 
 ---
