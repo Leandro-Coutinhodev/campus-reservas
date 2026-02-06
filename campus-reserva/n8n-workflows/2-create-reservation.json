@@ -1,0 +1,300 @@
+{
+  "name": "2. Create Reservation - Campus Reservas",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "create-reservation",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-create",
+      "name": "Webhook - Create Reservation",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "create-reservation"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Validar dados recebidos\nconst data = $json.body;\n\n// Validações básicas\nif (!data.spaceId || !data.date || !data.startTime || !data.endTime || !data.requesterName || !data.requesterEmail) {\n  throw new Error('Dados obrigatórios ausentes');\n}\n\n// Validar horário\nconst start = new Date(`${data.date}T${data.startTime}`);\nconst end = new Date(`${data.date}T${data.endTime}`);\n\nif (end <= start) {\n  throw new Error('Horário de término deve ser posterior ao início');\n}\n\n// Validar email\nconst emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\nif (!emailRegex.test(data.requesterEmail)) {\n  throw new Error('Email inválido');\n}\n\nreturn { json: data };"
+      },
+      "id": "function-validate",
+      "name": "Validate Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "calendar": "={{ $json.calendarId }}",
+        "start": "={{ $json.date }}T{{ $json.startTime }}:00",
+        "end": "={{ $json.date }}T{{ $json.endTime }}:00",
+        "options": {
+          "timeZone": "America/Belem"
+        }
+      },
+      "id": "google-calendar-check",
+      "name": "Google Calendar - Final Check",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [650, 300],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "1",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.length }}",
+              "operation": "equal",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "if-available",
+      "name": "IF Available",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "calendar": "={{ $('Validate Data').item.json.calendarId }}",
+        "start": "={{ $('Validate Data').item.json.date }}T{{ $('Validate Data').item.json.startTime }}:00",
+        "end": "={{ $('Validate Data').item.json.date }}T{{ $('Validate Data').item.json.endTime }}:00",
+        "title": "RESERVA: {{ $('Validate Data').item.json.spaceName }}",
+        "description": "Solicitante: {{ $('Validate Data').item.json.requesterName }}\\nEmail: {{ $('Validate Data').item.json.requesterEmail }}\\nFinalidade: {{ $('Validate Data').item.json.purpose }}",
+        "attendees": "={{ $('Validate Data').item.json.requesterEmail }}",
+        "options": {
+          "timeZone": "America/Belem",
+          "sendUpdates": "all"
+        }
+      },
+      "id": "google-calendar-create",
+      "name": "Google Calendar - Create Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [1050, 200],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "1",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO reservas.reservas (\n  espaco_id,\n  solicitante_nome,\n  solicitante_email,\n  finalidade,\n  data_reserva,\n  hora_inicio,\n  hora_fim,\n  status,\n  google_calendar_event_id\n)\nSELECT \n  e.id,\n  '{{ $('Validate Data').item.json.requesterName }}',\n  '{{ $('Validate Data').item.json.requesterEmail }}',\n  '{{ $('Validate Data').item.json.purpose }}',\n  '{{ $('Validate Data').item.json.date }}'::DATE,\n  '{{ $('Validate Data').item.json.startTime }}'::TIME,\n  '{{ $('Validate Data').item.json.endTime }}'::TIME,\n  'confirmada',\n  '{{ $json.id }}'\nFROM reservas.espacos_fisicos e\nWHERE e.codigo = '{{ $('Validate Data').item.json.spaceId }}'\nRETURNING id, data_reserva, hora_inicio, hora_fim",
+        "options": {}
+      },
+      "id": "postgres-insert",
+      "name": "PostgreSQL - Insert Reservation",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [1250, 200],
+      "credentials": {
+        "postgres": {
+          "id": "2",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const reservation = $json;\nconst webhook = $('Validate Data').item.json;\n\nconst formatDate = (dateStr) => {\n  const date = new Date(dateStr);\n  return date.toLocaleDateString('pt-BR', { \n    weekday: 'long', \n    year: 'numeric', \n    month: 'long', \n    day: 'numeric' \n  });\n};\n\nconst emailHtml = `\n<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"UTF-8\">\n  <style>\n    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }\n    .container { max-width: 600px; margin: 0 auto; }\n    .header { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; padding: 40px 30px; text-align: center; }\n    .header h1 { margin: 0; font-size: 28px; }\n    .content { background: #f9fafb; padding: 30px; }\n    .info-box { background: white; padding: 25px; margin: 20px 0; border-radius: 10px; border-left: 5px solid #3b82f6; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }\n    .info-row { display: flex; margin: 12px 0; }\n    .label { font-weight: 700; color: #1e3a8a; min-width: 120px; }\n    .value { color: #374151; }\n    .alert-box { background: #fef3c7; border-left: 5px solid #f59e0b; padding: 20px; margin: 20px 0; border-radius: 8px; }\n    .alert-box h3 { margin-top: 0; color: #92400e; }\n    .alert-box ul { margin: 10px 0; padding-left: 20px; }\n    .alert-box li { margin: 8px 0; color: #78350f; }\n    .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 14px; }\n    .footer p { margin: 5px 0; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1>✅ Reserva Confirmada!</h1>\n      <p style=\"margin: 10px 0 0 0; font-size: 16px;\">Campus Cametá - Sistema de Reservas</p>\n    </div>\n    <div class=\"content\">\n      <p style=\"font-size: 16px;\">Olá, <strong>${webhook.requesterName}</strong>!</p>\n      <p>Sua reserva foi <strong>confirmada com sucesso</strong>. Confira os detalhes abaixo:</p>\n      \n      <div class=\"info-box\">\n        <div class=\"info-row\">\n          <span class=\"label\">📍 Espaço:</span>\n          <span class=\"value\">${webhook.spaceName}</span>\n        </div>\n        <div class=\"info-row\">\n          <span class=\"label\">📅 Data:</span>\n          <span class=\"value\">${formatDate(webhook.date)}</span>\n        </div>\n        <div class=\"info-row\">\n          <span class=\"label\">🕐 Horário:</span>\n          <span class=\"value\">${webhook.startTime} às ${webhook.endTime}</span>\n        </div>\n        <div class=\"info-row\">\n          <span class=\"label\">📝 Finalidade:</span>\n          <span class=\"value\">${webhook.purpose}</span>\n        </div>\n        <div class=\"info-row\">\n          <span class=\"label\">🆔 Código:</span>\n          <span class=\"value\">#${reservation.id}</span>\n        </div>\n      </div>\n      \n      <div class=\"alert-box\">\n        <h3>⚠️ Informações Importantes:</h3>\n        <ul>\n          <li>Chegue com <strong>10 minutos de antecedência</strong></li>\n          <li>Mantenha o espaço <strong>limpo e organizado</strong></li>\n          <li>Em caso de cancelamento, notifique com <strong>24h de antecedência</strong></li>\n          <li>Este evento já foi <strong>adicionado ao seu Google Calendar</strong></li>\n          <li>A capacidade do espaço é de <strong>${webhook.capacity} pessoas</strong></li>\n        </ul>\n      </div>\n      \n      <p>Em caso de dúvidas, entre em contato conosco pelo email: <a href=\"mailto:reservas@campus.br\">reservas@campus.br</a></p>\n      <p style=\"margin-top: 20px;\"><strong>Equipe Campus Cametá</strong></p>\n    </div>\n    <div class=\"footer\">\n      <p>Este é um email automático. Por favor, não responda.</p>\n      <p>Sistema de Reservas - Campus Cametá © 2024</p>\n    </div>\n  </div>\n</body>\n</html>\n`;\n\nreturn {\n  json: {\n    to: webhook.requesterEmail,\n    subject: `✅ Reserva Confirmada - ${webhook.spaceName} - ${formatDate(webhook.date)}`,\n    html: emailHtml,\n    reservationId: reservation.id,\n    calendarEventId: $('Google Calendar - Create Event').item.json.id\n  }\n};"
+      },
+      "id": "function-email",
+      "name": "Prepare Email",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1450, 200]
+    },
+    {
+      "parameters": {
+        "fromEmail": "reservas@campus.br",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.html }}",
+        "options": {}
+      },
+      "id": "send-email",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [1650, 200],
+      "credentials": {
+        "smtp": {
+          "id": "3",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO reservas.notificacoes (\n  reserva_id,\n  destinatario_email,\n  tipo,\n  assunto,\n  corpo,\n  enviado,\n  enviado_em\n) VALUES (\n  {{ $('PostgreSQL - Insert Reservation').item.json.id }},\n  '{{ $('Prepare Email').item.json.to }}',\n  'confirmacao',\n  '{{ $('Prepare Email').item.json.subject }}',\n  '{{ $('Prepare Email').item.json.html }}',\n  TRUE,\n  NOW()\n)",
+        "options": {}
+      },
+      "id": "postgres-log-notification",
+      "name": "PostgreSQL - Log Notification",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [1850, 200],
+      "credentials": {
+        "postgres": {
+          "id": "2",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  \"success\": true,\n  \"message\": \"Reserva criada com sucesso!\",\n  \"reservationId\": $('PostgreSQL - Insert Reservation').item.json.id,\n  \"calendarEventId\": $('Prepare Email').item.json.calendarEventId,\n  \"emailSent\": true\n} }}"
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2050, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  \"success\": false,\n  \"message\": \"Espaço indisponível no horário solicitado\",\n  \"error\": \"CONFLICT\"\n} }}"
+      },
+      "id": "respond-error",
+      "name": "Respond Error - Unavailable",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1050, 400]
+    }
+  ],
+  "connections": {
+    "Webhook - Create Reservation": {
+      "main": [
+        [
+          {
+            "node": "Validate Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Data": {
+      "main": [
+        [
+          {
+            "node": "Google Calendar - Final Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar - Final Check": {
+      "main": [
+        [
+          {
+            "node": "IF Available",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Available": {
+      "main": [
+        [
+          {
+            "node": "Google Calendar - Create Event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error - Unavailable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar - Create Event": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL - Insert Reservation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL - Insert Reservation": {
+      "main": [
+        [
+          {
+            "node": "Prepare Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Email": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL - Log Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL - Log Notification": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "2",
+  "id": "2",
+  "meta": {
+    "instanceId": "campus-reservas"
+  },
+  "tags": []
+}

@@ -1,0 +1,105 @@
+{
+  "name": "1. Check Availability - Campus Reservas",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "check-availability",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-check",
+      "name": "Webhook - Check Availability",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "check-availability"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "calendar": "={{ $json.body.calendarId }}",
+        "start": "={{ $json.body.date }}T{{ $json.body.startTime }}:00",
+        "end": "={{ $json.body.date }}T{{ $json.body.endTime }}:00",
+        "options": {
+          "timeZone": "America/Belem"
+        }
+      },
+      "id": "google-calendar-get",
+      "name": "Google Calendar - Get Events",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "1",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Verificar se há eventos no período solicitado\nconst events = $input.all();\nconst hasConflict = events.length > 0;\n\nreturn {\n  json: {\n    available: !hasConflict,\n    spaceId: $('Webhook - Check Availability').item.json.body.spaceId,\n    calendarId: $('Webhook - Check Availability').item.json.body.calendarId,\n    date: $('Webhook - Check Availability').item.json.body.date,\n    startTime: $('Webhook - Check Availability').item.json.body.startTime,\n    endTime: $('Webhook - Check Availability').item.json.body.endTime,\n    conflictingEvents: events.length,\n    checkedAt: new Date().toISOString()\n  }\n};"
+      },
+      "id": "function-process",
+      "name": "Process Result",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [850, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Check Availability": {
+      "main": [
+        [
+          {
+            "node": "Google Calendar - Get Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar - Get Events": {
+      "main": [
+        [
+          {
+            "node": "Process Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Result": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "1",
+  "id": "1",
+  "meta": {
+    "instanceId": "campus-reservas"
+  },
+  "tags": []
+}
