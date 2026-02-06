@@ -89,13 +89,13 @@ O projeto foi desenvolvido como **MVP do Projeto Integrador I**, com foco em aut
 * Registrar espaços/calendários
 
 
-![Diagrama de Casos de Uso](/docs/useCase.png)
+![Diagrama de Casos de Uso](campus-reserva/docs/useCase.png)
 
 ---
 
 # 7. Diagrama de Arquitetura do Projeto
 
-![Diagrama de Arquitetura](/docs/arquitetura.png)
+![Diagrama de Arquitetura](campus-reserva/docs/arquitetura.png)
 
 **Descrição:** O usuário interage com a interface web ou chatbot. As requisições são enviadas ao n8n via Webhook, que orquestra a lógica de negócio, consulta o banco de dados ou o Google Calendar, registra reservas e dispara notificações por e-mail.
 
@@ -103,7 +103,7 @@ O projeto foi desenvolvido como **MVP do Projeto Integrador I**, com foco em aut
 
 # 8. Diagrama Entidade-Relacionamento
 
-![Diagrama ER](/docs/er.png)
+![Diagrama ER](campus-reserva/docs/er.png)
 
 
 # 9. Configuração do Projeto
