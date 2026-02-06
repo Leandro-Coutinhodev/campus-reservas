@@ -22,7 +22,7 @@ O projeto foi desenvolvido como **MVP do Projeto Integrador I**, com foco em aut
 
 * Consulta de disponibilidade de salas
 * Criação de reservas
-* Registro no Google Calendar ou simulação via PostgreSQL
+* Registro no Google Calendar e PostgreSQL
 * Envio de e-mail de confirmação
 * Monitoramento básico de alterações em reservas
 
