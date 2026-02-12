@@ -219,6 +219,8 @@ npm start
 * Lógica de verificação de conflitos de horário
 
 ---
-
+**Desenvolvedores**
+* Leandro Júnior Coutinho Mindelo
+* Jhenifer Eduarda Gaia Almeida
 
 **Projeto Integrador I – Curso de Sistemas de Informação**
